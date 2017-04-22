@@ -22,16 +22,29 @@ LABEL {
 	ADDR	$0100;
 	SIZE	255;
 };
+LABEL { NAME "BASIC11_IRQ_VECTOR";     ADDR  $0245;  Size 4;  };
+
+LABEL { NAME "NUMBER_OF_COLUMN_FOR_PRINTER"; ADDR $0256; Size 1;  };
+LABEL { NAME "NUMBER_OF_LINES_FOR_PRINTER";  ADDR $0257; Size 1;  };
 
 #
 # MICRODISC I/O
 #
 
-LABEL {
-	NAME	"VIA";
-	ADDR	$300;
-	SIZE	16;
-};
+LABEL { NAME "V1DRB";  ADDR  $0300; Size 1; };
+LABEL { NAME "V1DRA";  ADDR  $0301; Size 1; };
+LABEL { NAME "V1DDRB"; ADDR  $0302; Size 1; };
+LABEL { NAME "V1DDRA"; ADDR  $0303; Size 1; };
+
+LABEL { NAME "V1T1";   ADDR  $0304; Size 2; };
+LABEL { NAME "V1T1L";  ADDR  $0306; Size 2; };
+LABEL { NAME "V1T2";   ADDR  $0308; Size 2; };
+
+LABEL { NAME "V1ACR";  ADDR  $030b; Size 1; };
+LABEL { NAME "V1PCR";  ADDR  $030c; Size 1; };
+LABEL { NAME "V1IFR";  ADDR  $030d; Size 1; };
+LABEL { NAME "V1ER";   ADDR  $030e; Size 1; };
+LABEL { NAME "V1DRAB"; ADDR  $030f; Size 1; };
 
 LABEL {
 	NAME	"MICRODISC_FDC_COMMAND";
@@ -177,7 +190,23 @@ RANGE {
 	TYPE	BYTETABLE;
 	START	$c003;
 	NAME	"RWBUF";
-	END	$c003;
+	END	    $c004;
+};
+
+RANGE {
+	TYPE	BYTETABLE;
+	START	$c005;
+	NAME	"type_of_error";
+	END	    $c005;
+	comment "b5=0 write fault if b5=1 read fault";
+};
+
+
+RANGE {
+	TYPE	BYTETABLE;
+	START	$c007;
+	NAME	"number_of_retry";
+	END	    $c007;
 };
 
 RANGE {
@@ -248,6 +277,24 @@ RANGE {
 LABEL {
 	NAME	"SEDKERN_START";
 	ADDR	$c400;
+};
+
+LABEL {
+	NAME	"MODIFY_IRQ_NMI";
+	ADDR	$c446;
+	comment "Modify irq and nmi vector";
+};
+
+LABEL {
+	NAME	"DELETE_COMMAND";
+	ADDR	$c6ec;
+	comment "$c6ec";
+};
+
+LABEL {
+	NAME	"MOVE_COMMAND";
+	ADDR	$c756;
+	comment "$c756";
 };
 
 RANGE {
@@ -735,9 +782,27 @@ LABEL {
 };
 
 LABEL {
+	NAME	"display_exp_scientific_notation";
+	ADDR	$ef4f;
+	comment "$ef4f";
+};
+
+
+RANGE { START $EF54; END $EF54; TYPE BYTETABLE;
+	comment "BIT $XXXX jump 2 bytes";
+};
+
+LABEL {
+	NAME	"display_char_in final_string";
+	ADDR	$ef5a;
+	comment "$ef5a";
+};
+
+LABEL {
 	NAME	"CMD_LUSING";
 	ADDR	$f036;
 };
+
 
 LABEL {
 	NAME	"CMD_LINE";

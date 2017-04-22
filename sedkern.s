@@ -1,5 +1,5 @@
-; da65 V2.11.0 - (C) Copyright 2000-2005,  Ullrich von Bassewitz
-; Created:    2006-10-20 10:33:58
+; da65 V2.15
+; Created:    2017-04-22 21:38:26
 ; Input file: SEDKERN.TAP
 ; Page:       1
 
@@ -10,8 +10,22 @@ L0000           := $0000
 STACK           := $0100
 L0228           := $0228
 L0244           := $0244
+BASIC11_IRQ_VECTOR:= $0245
+NUMBER_OF_COLUMN_FOR_PRINTER:= $0256
+NUMBER_OF_LINES_FOR_PRINTER:= $0257
 L02B0           := $02B0
-VIA             := $0300
+V1DRB           := $0300
+V1DRA           := $0301
+V1DDRB          := $0302
+V1DDRA          := $0303
+V1T1            := $0304
+V1T1L           := $0306
+V1T2            := $0308
+V1ACR           := $030B
+V1PCR           := $030C
+V1IFR           := $030D
+V1ER            := $030E
+V1DRAB          := $030F
 MICRODISC_FDC_COMMAND:= $0310
 MICRODISC_FDC_TRACK:= $0311
 MICRODISC_FDC_SECTOR:= $0312
@@ -52,6 +66,8 @@ DRIVE           := $C000
 PISTE           := $C001
 SECTEUR         := $C002
 RWBUF           := $C003
+type_of_error   := $C005                        ; b5=0 write fault if b5=1 read fault
+number_of_retry := $C007
 DRVDEF          := $C009
 DRVSYS          := $C00A
 EXTER           := $C00D
@@ -63,18 +79,18 @@ BUF1            := $C100                        ; buffer for descriptors
 BUF2            := $C200                        ; buffer for bitmap
 BUF3            := $C300                        ; buffer for directory sector
 SEDKERN_START:
-        lda     $C007
+        lda     number_of_retry
         lsr     a
 LC404:  lda     #$00
         ror     a
         sta     ATMORI
         bpl     LC41B
         lda     #$50
-        sta     $0256
+        sta     NUMBER_OF_COLUMN_FOR_PRINTER
         lsr     a
         sta     $31
         sta     $32
-        sta     $0257
+        sta     NUMBER_OF_LINES_FOR_PRINTER
         bne     LC421
 LC41B:  lda     #$5D
         sta     $31
@@ -95,13 +111,15 @@ LC434:  sta     $0400,x
         sta     $EF
         sty     $F0
         stx     $F1
+; Modify irq and nmi vector
+MODIFY_IRQ_NMI:
         lda     #$88
         ldy     #$C4
         bit     ATMORI
         bpl     LC475
-        sta     $0245
-        stx     $0246
-        sty     $0248
+        sta     BASIC11_IRQ_VECTOR
+        stx     BASIC11_IRQ_VECTOR+1
+        sty     BASIC11_IRQ_VECTOR+3
         stx     $0249
         lda     #$5B
         sta     $023C
@@ -218,6 +236,7 @@ LC566:  sta     EXEVEC+1
         ldy     #$00
         cli
         jmp     L0471
+
 MSG_DOS_ALTERED:
         .byte   $0A,$8C,$81
         .byte   "** WARNING **"
@@ -231,6 +250,7 @@ LC589:  .byte   " is altered !"
         .byte   $64
         .byte   $D3
         rts
+
         lda     LC5AE
         ldx     LC5AF
         sta     PISTE
@@ -245,6 +265,7 @@ LC5B0:  .byte   $1A
         eor     #$56
         eor     $A0
         jmp     L414F
+
         .byte   $44
         jsr     L4944
         .byte   $53
@@ -264,6 +285,7 @@ LC5B0:  .byte   $1A
         ldy     #$0D
         asl     a
         jmp     L414F
+
         .byte   $44
         jsr     L4F53
         eor     $52,x
@@ -275,6 +297,7 @@ LC5B0:  .byte   $1A
         ldy     #$0D
         asl     a
         jmp     L414F
+
         .byte   $44
         jsr     L4154
         .byte   $52
@@ -320,19 +343,23 @@ LC637:  txa
         lda     $C1
 LC63B:  ldx     $0F
 LC63D:  jmp     LEA41
+
 LC640:  pla
         jsr     L04E9
         jsr     L0467
         asl     FLAGIF
         bcs     LC64F
         jmp     LC8AD
+
 LC64F:  nop
         nop
         nop
         rts
+
         jsr     DO_RAMROM
         lda     ($16),y
         jmp     DO_RAMROM
+
         nop
         nop
         nop
@@ -358,7 +385,8 @@ LC66B:  sta     EXEVEC+1
         pla
         plp
         rts
-        bit     VIA+13
+
+        bit     V1IFR
         bvc     LC69C
         pha
         lda     #$04
@@ -367,6 +395,7 @@ LC66B:  sta     EXEVEC+1
         inc     $0274
 LC698:  pla
         jmp     LEC03
+
 LC69C:  pla
         pla
         sta     $F2
@@ -378,8 +407,10 @@ LC69C:  pla
         jsr     RAMROM
         pla
         rti
+
         sta     MICRODISC_CONTROL
         jmp     (RESET_VECTOR)
+
         clc
         jsr     DO_RAMROM
         pha
@@ -390,11 +421,13 @@ LC69C:  pla
         php
         bcs     LC6C4
         jmp     L0228
+
 LC6C4:  jsr     LF888
         lda     #$17
         ldy     #$EC
         jsr     L046B
         jmp     LC475
+
         lda     #$04
         pha
         lda     #$F1
@@ -405,6 +438,7 @@ LC6C4:  jsr     LF888
         pha
         jsr     RAMROM
         jmp     LD270
+
         nop
         nop
         nop
@@ -414,11 +448,19 @@ LC6C4:  jsr     LF888
         nop
         nop
         jmp     L0487
+
+; $c6ec
+DELETE_COMMAND:
         jmp     L0471
+
         jmp     L0000
+
         jmp     DO_RAMROM
+
         jmp     DO_IRQRAM
+
         jmp     L04B4
+
         sty     L0000
         brk
         brk
@@ -459,17 +501,23 @@ LC737:  txa
         lda     $C1
 LC73B:  ldx     $0F
 LC73D:  jmp     LECB9
+
 LC740:  pla
         jsr     L04E9
         jsr     L0467
         asl     FLAGIF
         bcs     LC74F
         jmp     LC8C1
+
 LC74F:  ror     $0252
         rts
+
         jsr     DO_RAMROM
+; $c756
+MOVE_COMMAND:
         lda     ($16),y
         jmp     DO_RAMROM
+
         lda     #$45
         ldy     #$D8
         bne     LC76B
@@ -492,7 +540,8 @@ LC76B:  sta     EXEVEC+1
         pla
         plp
         rts
-        bit     VIA+13
+
+        bit     V1IFR
         bvc     LC79C
         pha
         lda     #$04
@@ -501,6 +550,7 @@ LC76B:  sta     EXEVEC+1
         inc     $0274
 LC798:  pla
         jmp     LEE22
+
 LC79C:  pla
         pla
         sta     $F2
@@ -512,8 +562,10 @@ LC79C:  pla
         jsr     RAMROM
         pla
         rti
+
         sta     MICRODISC_CONTROL
         jmp     (RESET_VECTOR)
+
         clc
         jsr     DO_RAMROM
         pha
@@ -524,11 +576,13 @@ LC79C:  pla
         php
         bcs     LC7C4
         jmp     L0244
+
 LC7C4:  jsr     LF8B8
         lda     #$17
         ldy     #$EC
         jsr     L046B
         jmp     LC471
+
         lda     #$04
         pha
         lda     #$F1
@@ -539,6 +593,7 @@ LC7C4:  jsr     LF8B8
         pha
         jsr     RAMROM
         jmp     LD306
+
         nop
         nop
         nop
@@ -548,11 +603,17 @@ LC7C4:  jsr     LF8B8
         nop
         nop
         jmp     L0487
+
         jmp     L0471
+
         jmp     L0000
+
         jmp     DO_RAMROM
+
         jmp     DO_IRQRAM
+
         jmp     L04B4
+
         sty     L0000
         brk
         brk
@@ -1121,29 +1182,30 @@ LCF17:  .byte   "K ON BYTE "
 
         .byte   $A0
 XRWTS:  php
-        lda     VIA+14
+        lda     V1ER
         pha
         tya
         pha
         lda     #$40
-        sta     VIA+14
+        sta     V1ER
         jsr     XRWTS_INTERNAL
         pla
         tay
         pla
-        sta     VIA+14
+        sta     V1ER
         plp
         lda     #$FF
         bit     $C017
         rts
+
 XRWTS_INTERNAL:
         ldy     #$02
 LCFEB:  sty     $C006
         ldy     #$08
-        sty     $C007
+        sty     number_of_retry
 XRWTS_ONCE:
         pha
-        stx     $C005
+        stx     type_of_error
 LCFF7:  ldy     DRIVE
         lda     LCD90,y
         bit     PISTE
@@ -1157,13 +1219,14 @@ LD004:  sta     MICRODISC_CONTROL_SHADOW
         bcc     LD016
         pla
         rts
+
 LD016:  lda     RWBUF
         ldy     $C004
         sta     $F3
         sty     $F4
         sei
         lda     #$20
-        bit     $C005
+        bit     type_of_error
         bpl     LD051
         bvc     LD02C
         beq     LD051
@@ -1181,7 +1244,7 @@ LD03A:  and     #$7F
         txa
         ldx     #$18
         jsr     XRWTS_ONCE
-        sta     $C005
+        sta     type_of_error
         tax
         lda     MICRODISC_FDC_DATA
         sta     MICRODISC_FDC_TRACK
@@ -1215,6 +1278,7 @@ LD081:  lda     MICRODISC_DRQ
         bne     LD081
         inc     $F4
         jmp     LD081
+
 LD093:  lda     MICRODISC_DRQ
         bmi     LD093
         lda     ($F3),y
@@ -1223,9 +1287,11 @@ LD093:  lda     MICRODISC_DRQ
         bne     LD093
         inc     $F4
         jmp     LD093
+
         bit     MICRODISC_CONTROL
         bpl     LD0AD
         jmp     IRQRAM
+
 LD0AD:  pla
         pla
         pla
@@ -1235,7 +1301,7 @@ LD0AD:  pla
         lda     MICRODISC_FDC_COMMAND
         and     #$5C
         tay
-        ldx     $C005
+        ldx     type_of_error
         bmi     LD0C4
         ldy     #$00
 LD0C4:  sty     $C017
@@ -1251,12 +1317,14 @@ LD0C4:  sty     $C017
 LD0DA:  sec
 LD0DB:  pla
         rts
+
 LD0DD:  tya
         and     #$0C
         beq     LD0DB
-        dec     $C007
+        dec     number_of_retry
         beq     LD0DA
 LD0E7:  jmp     LCFF7
+
 LD0EA:  txa
         pha
         lda     RWBUF
@@ -1281,8 +1349,9 @@ LD0EA:  txa
         sta     MICRODISC_FDC_TRACK
 LD11B:  pla
         tax
-        stx     $C005
+        stx     type_of_error
         rts
+
 LD121:  lda     MICRODISC_CONTROL_SHADOW
         sta     MICRODISC_CONTROL
         lda     MICRODISC_FDC_COMMAND
@@ -1292,6 +1361,7 @@ LD121:  lda     MICRODISC_CONTROL_SHADOW
         sta     MICRODISC_FDC_COMMAND
 LD132:  sec
         jmp     NMIRAM
+
         stx     $F3
         ldx     #$04
         jsr     LD36C
@@ -1318,6 +1388,7 @@ LD15C:  jsr     XROM
         .byte   $F4
         .byte   $C3
         rts
+
         jsr     XROM
         pha
         cpy     $44
@@ -1358,15 +1429,19 @@ LD1AC:  jsr     XROM
         .byte   $3A
         .byte   $C7
         rts
+
         jsr     XROM
         sta     $6CC7,y
         .byte   $C7
         rts
+
         jsr     XROM
         rti
+
         iny
         asl     $C8,x
         rts
+
 LD1C4:  .byte   $20
         cld
 LD1C6:  cmp     $3D,x
@@ -1374,6 +1449,7 @@ LD1C6:  cmp     $3D,x
         .byte   $2F
         iny
         rts
+
 LD1CC:  jsr     XROM
         .byte   $1F
         cmp     #$52
@@ -1383,6 +1459,7 @@ LD1CC:  jsr     XROM
 LD1D8:  cmp     #$23
         dex
         rts
+
 LD1DC:  jsr     XROM
         .byte   $1C
         dex
@@ -1392,11 +1469,13 @@ LD1E3:  jsr     XROM
         ora     $3FCA
         dex
         rts
+
 LD1EB:  jsr     XROM
         eor     ($CA,x)
         .byte   $73
         dex
         rts
+
         jsr     LD39E
         jsr     XROM
         tya
@@ -1404,6 +1483,7 @@ LD1EB:  jsr     XROM
         .byte   $E2
         dex
         rts
+
 LD1FE:  jsr     XROM
         .byte   $EF
         dex
@@ -1413,10 +1493,12 @@ LD206:  jsr     XROM
         .byte   $CB
         beq     LD1D8
         rts
+
 LD20E:  jsr     XROM
         .byte   $12
         cpy     TOKEN_ADDR_TABLE+178
         rts
+
 LD216:  jsr     LD224
 LD219:  clc
         .byte   $24
@@ -1425,10 +1507,12 @@ LD21C:  jsr     XROM
         adc     $09CE,x
         .byte   $CF
         rts
+
 LD224:  jsr     XROM
         .byte   $8B
         dec     LCF17
         rts
+
 LD22C:  lda     #$2C
 LD22E:  jsr     XROM
         .byte   $DB
@@ -1444,6 +1528,7 @@ LD23D:  dey
         .byte   $D3
         sty     $D4
         rts
+
 LD244:  jsr     XROM
         cli
         cmp     ($E8),y
@@ -1453,6 +1538,7 @@ LD24C:  jsr     XROM
         .byte   $D2
         lda     #$D2
         rts
+
 LD254:  .byte   $20
 LD255:  cld
         cmp     $ED,x
@@ -1462,6 +1548,7 @@ LD25C:  jsr     XROM
 LD25F:  ora     LD2D4,y
         .byte   $D4
         rts
+
 LD264:  jsr     XROM
         beq     LD23D
         .byte   $AB
@@ -1471,39 +1558,46 @@ LD264:  jsr     XROM
 LD270:  dec     $82,x
         .byte   $D7
         rts
+
 LD274:  jsr     LD21B
 LD277:  jsr     XROM
         ora     $D7,x
         bne     LD255
         rts
+
 LD27F:  jsr     LD216
 LD282:  jsr     XROM
         bpl     LD25F
         .byte   $CB
         cld
         rts
+
 LD28A:  jsr     XROM
         .byte   $6B
         cld
         rol     $D9
         rts
+
 LD292:  jsr     XROM
         stx     $D9,y
         .byte   $22
         .byte   $DA
         rts
+
         jsr     XROM
         .byte   $80
         .byte   $DA
         .byte   $0B
         .byte   $DB
         rts
+
 LD2A2:  jsr     XROM
         .byte   $97
         .byte   $DA
         .byte   $22
         .byte   $DB
         rts
+
 LD2AA:  jsr     XROM
         .byte   $B7
         .byte   $DC
@@ -1512,18 +1606,22 @@ LD2AA:  jsr     XROM
         cpx     #$DD
         cpx     $DD
         rts
+
 LD2BA:  jsr     XROM
         .byte   $73
         dec     LDE7B,x
         rts
+
 LD2C2:  jsr     XROM
         lda     $DE
         lda     $60DE
 LD2CA:  jsr     XROM
         cmp     $D8,x
         rti
+
         .byte   $DF
         rts
+
 LD2D2:  .byte   $20
         cld
 LD2D4:  cmp     $D1,x
@@ -1533,33 +1631,40 @@ LD2DA:  jsr     XROM
         adc     $71E2
         .byte   $E2
         rts
+
 LD2E2:  jsr     XROM
         adc     $7DE3,y
         .byte   $E3
         rts
+
 LD2EA:  jsr     XROM
         .byte   $87
         .byte   $E3
         .byte   $8B
         .byte   $E3
         rts
+
 LD2F2:  jsr     XROM
         stx     $92E3
         .byte   $E3
         rts
+
 LD2FA:  jsr     XROM
         sta     $53E7,x
         inx
         rts
+
 LD302:  jsr     XROM
         .byte   $05
 LD306:  sbc     #$78
         .byte   $EB
         rts
+
 LD30A:  jsr     XROM
         .byte   $C7
         cpx     LEDE0
         rts
+
 LD312:  jsr     XROM
         adc     $10F0,y
         sbc     ($60),y
@@ -1569,31 +1674,37 @@ LD31E:  .byte   $F4
         .byte   $EF
         .byte   $F4
         rts
+
 LD322:  jsr     XROM
         and     $F5,x
         bcc     LD31E
         rts
+
 LD32A:  jsr     XROM
         .byte   $CB
         .byte   $F7
         ora     ($F8,x)
         rts
+
 LD332:  jsr     XROM
         rol     $82F9,x
         .byte   $F9
         rts
+
 LD33A:  jsr     XROM
         .byte   $E2
         brk
         .byte   $E2
         brk
         rts
+
 LD342:  jsr     XROM
         inx
         brk
         inx
         brk
         rts
+
 LD34A:  ldy     #$09
         .byte   $2C
 LD34D:  ldy     #$00
@@ -1604,6 +1715,7 @@ LD34F:  lda     COMMON_EXT_TABLE,x
         cpy     #$0C
         bne     LD34F
         rts
+
 LD35C:  lda     EXTER
         ldy     $C00E
         bne     LD376
@@ -1634,8 +1746,10 @@ LD38B:  iny
         plp
         bpl     LD38B
         rts
+
 LD398:  jsr     LD33A
         jmp     LD3A1
+
 LD39E:  jsr     LD342
 LD3A1:  php
         cmp     #$61
@@ -1645,6 +1759,7 @@ LD3A1:  php
         and     #$DF
 LD3AC:  plp
         rts
+
         ldx     #$00
         stx     NOERROR
         tsx
@@ -1707,6 +1822,7 @@ LD417:  txa
         pha
         jsr     LD1E3
         jmp     LD39E
+
 LD428:  lda     $C01F
         ldy     $C020
         sta     $E9
@@ -1722,9 +1838,12 @@ LD439:  iny
         cmp     #$D3
         bne     LD439
         jmp     LF5BA
+
 LD449:  rts
+
 LD44A:  lda     #$00
         jmp     LDFF9
+
 LD44F:  sec
         .byte   $24
 LD451:  clc
@@ -1750,6 +1869,7 @@ LD475:  lda     #$0C
         jsr     LD5B5
         beq     LD481
         jmp     LD503
+
 LD481:  cmp     #$2C
         beq     LD475
         cmp     #$C3
@@ -1817,6 +1937,7 @@ LD4E6:  stx     $C028
         stx     DRVDEF
 LD503:  jsr     LD7BD
         jmp     LD39E
+
 LD509:  ldx     #$00
         lda     #$09
         sta     $F2
@@ -1901,6 +2022,7 @@ LD597:  jsr     DO_EXEVEC
         bpl     LD5C3
 LD5AC:  ldx     #$02
         jmp     LD67E
+
 LD5B1:  cmp     #$2A
         bne     LD5C3
 LD5B5:  lda     #$3F
@@ -1910,6 +2032,7 @@ LD5B7:  sta     $C029,x
         bne     LD5B7
         dex
         rts
+
 LD5C1:  inc     $F3
 LD5C3:  cmp     #$3F
         beq     LD5D7
@@ -1922,6 +2045,7 @@ LD5C3:  cmp     #$3F
         cmp     #$5B
         bcs     LD5AC
 LD5D7:  rts
+
 XROM:   sta     $0C
         sty     $0D
         php
@@ -1953,6 +2077,7 @@ LD5F8:  lda     ($0E),y
         lda     $0C
         plp
         jmp     L0471
+
 LD60E:  clc
         adc     #$41
         bvc     XAFCAR
@@ -1977,6 +2102,7 @@ XAFCAR: cmp     #$0D
         sta     $30
         lda     #$0D
 LD634:  jmp     LD20E
+
 XAFSTR: sta     $91
         sty     $92
         ldy     #$00
@@ -1986,6 +2112,7 @@ LD63D:  lda     ($91),y
         iny
         bne     LD63D
 LD647:  rts
+
 LD648:  ldx     #$14
         jsr     LD36C
         lda     DRIVE
@@ -2001,6 +2128,7 @@ LD648:  ldx     #$14
         jsr     LD206
         plp
         rts
+
 LD669:  jsr     LD302
         cmp     #$1B
         beq     LD675
@@ -2008,14 +2136,17 @@ LD669:  jsr     LD302
         bne     LD669
         clc
 LD675:  rts
+
         jsr     LD669
         bcc     LD675
         pla
         pla
         rts
+
 LD67E:  inx
         stx     NOERROR
         jmp     (LC01D)
+
         txa
         jsr     LD7DE
         lda     $A8
@@ -2045,6 +2176,7 @@ LD692:  sta     NOLIGN
         sta     $C021
         sty     $C022
         rts
+
 LD6C9:  jsr     LD30A
         ldx     NOERROR
         cpx     #$04
@@ -2053,7 +2185,7 @@ LD6C9:  jsr     LD30A
         jsr     LD36C
         lda     PISTE
         jsr     XAFHEX
-        lda     $C005
+        lda     type_of_error
         and     #$F0
         eor     #$F0
         beq     LD6FB
@@ -2062,7 +2194,7 @@ LD6C9:  jsr     LD30A
         lda     SECTEUR
         jsr     XAFHEX
         ldx     #$03
-        lda     $C005
+        lda     type_of_error
         and     #$20
         beq     LD6FD
 LD6FB:  ldx     #$02
@@ -2088,11 +2220,13 @@ LD71B:  cpx     #$31
         ldx     #$01
         jsr     LD758
         jmp     LD73B
+
 LD734:  txa
         sbc     #$19
         tax
         jsr     LD35C
 LD73B:  jmp     LD178
+
 XCURON: sec
         .byte   $24
 XCUROFF:clc
@@ -2102,6 +2236,7 @@ XCUROFF:clc
         rol     $026A
         lda     #$01
         jmp     LD32A
+
 LD74E:  ldx     #$00
 LD750:  ldy     #$00
         bit     $03A2
@@ -2141,6 +2276,7 @@ LD791:  ora     #$30
         bpl     LD761
         lda     $F3
         jmp     LD624
+
 LD79E:  sec
         .byte   $24
 LD7A0:  clc
@@ -2153,17 +2289,20 @@ LD7A5:  lda     $C029,x
         bpl     LD7A5
         sec
 LD7B0:  rts
+
 LD7B1:  rol     $F2
         bcc     LD7B0
         ldx     #$05
         .byte   $2C
 LD7B8:  ldx     #$01
         jmp     LD67E
+
 LD7BD:  ldy     $C028
 LD7C0:  sty     DRIVE
         lda     $C039,y
         beq     LD7B8
         rts
+
 LD7C9:  ldx     #$0E
         .byte   $2C
 LD7CC:  ldx     #$10
@@ -2210,6 +2349,7 @@ LD7FE:  ldx     #$1C
         jsr     LD244
         tax
         jmp     LD2C2
+
 LD81C:  inc     $16
         bne     LD822
         inc     $17
@@ -2217,6 +2357,7 @@ LD822:  ldy     #$00
         bit     $C048
         bvc     LD82C
         jmp     DO_EXEVEC
+
 LD82C:  lda     ($16),y
         beq     LD86F
         bpl     LD871
@@ -2224,10 +2365,12 @@ LD82C:  lda     ($16),y
         bpl     LD86F
         and     #$7F
         rts
-LD83A:  sta     VIA
+
+LD83A:  sta     V1DRB
         lda     #$08
-        and     VIA
+        and     V1DRB
         rts
+
 LD843:  sec
         .byte   $24
 LD845:  clc
@@ -2250,6 +2393,7 @@ LD86C:  and     #$7F
         plp
 LD86F:  bit     $E2
 LD871:  rts
+
 LD872:  plp
         bpl     LD871
         lda     #$00
@@ -2274,6 +2418,7 @@ LD89B:  cmp     QWAZERTY_CONV,x
         lda     $C046
 LD8A6:  ldx     $C047
         jmp     LD86F
+
 LD8AC:  lda     $0208
         pha
         lda     LCD47,x
@@ -2300,6 +2445,7 @@ LD8D3:  ora     $0208
         iny
         bne     LD8E3
         jmp     LD963
+
 LD8E3:  iny
         beq     LD952
         cmp     #$20
@@ -2357,6 +2503,7 @@ LD943:  dec     $16
         ror     $C049
 LD94C:  ldx     $C047
 LD94F:  jmp     LD86F
+
 LD952:  lda     #$7F
         bit     $C04A
         bmi     LD94C
@@ -2461,6 +2608,7 @@ LDA18:  and     #$7F
         txa
         sta     KEYDEF,y
 LDA1F:  rts
+
         jsr     LD27F
         php
         sei
@@ -2488,6 +2636,7 @@ LDA30:  rol     a
         jsr     LD1EB
         lsr     FLAGIF
         rts
+
 XPMAP:  jsr     LE62E
         nop
 LDA50:  jsr     LDA60
@@ -2513,10 +2662,12 @@ LDA75:  jsr     XRWTS
         bvc     LDA7F
         inx
 LDA7F:  jmp     LD67E
+
 XSCAT:  lda     $C025
         ldy     $C026
         bne     LDA94
 XSMAP:  jmp     LDC80
+
         nop
 LDA8E:  ldx     #$C2
         .byte   $2C
@@ -2547,6 +2698,7 @@ LDAC3:  lda     BUF3,x
         dey
         bpl     LDAC3
 LDACD:  rts
+
 LDACE:  lda     #$C1
         bit     $C2A9
         .byte   $2C
@@ -2560,6 +2712,7 @@ LDADF:  sta     ($0E),y
         iny
         bne     LDADF
         rts
+
         lda     $C025
         ldy     $C026
         jsr     LDA63
@@ -2571,6 +2724,7 @@ LDAF3:  lda     $BF39,y
         iny
         bne     LDAF3
         rts
+
 LDAFE:  lda     $C025
         ldy     $C026
         jsr     LDA63
@@ -2582,6 +2736,7 @@ LDB0C:  lda     BUF3,x
         iny
         bne     LDB0C
         rts
+
 LDB17:  ldy     #$F4
 LDB19:  lda     $BF35,y
         cmp     #$3F
@@ -2593,6 +2748,7 @@ LDB25:  inx
         bne     LDB19
         ldx     $C027
         rts
+
 LDB2D:  jsr     XPMAP
 XTVNM:  lda     #$14
         ldy     #$04
@@ -2612,6 +2768,7 @@ LDB48:  stx     $C027
         ldy     $C301
         bne     LDB34
         rts
+
 XTRVCA: jsr     LDBA5
         bne     LDB92
         lda     $C208
@@ -2643,6 +2800,7 @@ LDB92:  txa
         bne     LDBBF
         inc     $C205
         rts
+
 LDBA5:  lda     #$14
         ldy     #$04
 LDBA9:  sta     $C025
@@ -2654,6 +2812,7 @@ LDBA9:  sta     $C025
         ldy     $C301
         bne     LDBA9
 LDBBF:  rts
+
 XWDESC: sta     $C058
         sty     $C059
         sta     $C05A
@@ -2721,6 +2880,7 @@ LDC56:  lda     #$00
         lda     $C05C
         ldy     $C05D
         jmp     LDA5D
+
         clc
         .byte   $24
 XLIBSE: sec
@@ -2731,7 +2891,9 @@ XLIBSE: sec
         bcc     LDCD4
 LDC78:  ldx     #$07
         jmp     LD67E
+
 LDC7D:  jmp     LE67F
+
 LDC80:  bit     $2F
         bpl     LDC89
         php
@@ -2740,6 +2902,7 @@ LDC80:  bit     $2F
 LDC89:  ldy     #$02
 LDC8B:  lda     #$14
         jmp     LDA8E
+
 LDC90:  lda     #$01
         ldy     #$00
 LDC94:  pha
@@ -2780,6 +2943,7 @@ LDCBD:  sec
         ora     #$80
 LDCD4:  iny
         rts
+
 LDCD6:  dey
         tax
         bpl     LDCE0
@@ -2813,11 +2977,13 @@ LDCFE:  pha
         ror     a
         lsr     $F3
         jmp     LE6C4
+
 LDD0E:  lda     #$00
 LDD10:  rol     a
         dey
         bpl     LDD10
         rts
+
 XDETSE: jsr     LDCD6
         ora     $C210,x
         cmp     $C210,x
@@ -2828,6 +2994,7 @@ XDETSE: jsr     LDCD6
         inc     $C203
         clc
 LDD2C:  rts
+
 XCREAY: jsr     LDCD6
         eor     #$FF
         and     $C210,x
@@ -2840,6 +3007,7 @@ XCREAY: jsr     LDCD6
 LDD45:  dec     $C202
         clc
 LDD49:  rts
+
 CMD_SAVEM:
         lda     #$40
 LDD4C:  .byte   $2C
@@ -2857,6 +3025,7 @@ CMD_SAVEO:
 LDD5E:  jsr     LD39E
         bne     LDD66
         jmp     LDE0B
+
 LDD66:  jsr     LD22C
         cmp     #$54
         bne     LDD89
@@ -2940,6 +3109,7 @@ LDE20:  ldx     #$08
         .byte   $2C
 LDE23:  ldx     #$09
         jmp     LD67E
+
 LDE28:  sta     $C04D
         lda     $9A
         ldy     $9B
@@ -2955,6 +3125,7 @@ LDE3B:  sta     $C054
         sta     $C056
         sta     $C057
 LDE4C:  rts
+
 CMD_CREATEW:
         jsr     LD44F
         jsr     LDFDE
@@ -3002,13 +3173,16 @@ LDE9C:  sei
         beq     LDEC5
         jsr     LDB07
         jmp     LDF1B
+
 LDEB5:  ldx     #$02
         .byte   $2C
 LDEB8:  ldx     #$06
         jmp     LD67E
+
 LDEBD:  jsr     LE264
         bcs     LDEEF
         jmp     LDF11
+
 LDEC5:  ldy     #$02
 LDEC7:  lda     $C032,y
         pha
@@ -3032,6 +3206,7 @@ LDEDD:  ldx     #$03
         pla
 LDEEF:  cli
         rts
+
 LDEF1:  ldy     #$00
 LDEF3:  pla
         sta     $C032,y
@@ -3121,6 +3296,7 @@ LDFA8:  jsr     LDA5D
         sty     $C101
         jsr     XSVSEC
         jmp     LDFD4
+
 LDFC5:  lda     $C05C
         ldy     $C05D
         sta     $C035
@@ -3130,9 +3306,11 @@ LDFD4:  jsr     XSMAP
         jsr     LDAEE
         cli
         jmp     XSCAT
+
 LDFDE:  lda     $021F
         beq     LDFF3
         jmp     LD16F
+
 LDFE6:  lda     #$00
         ldx     #$03
 LDFEA:  sta     $C04D,x
@@ -3140,6 +3318,7 @@ LDFEA:  sta     $C04D,x
         bpl     LDFEA
         stx     $C072
 LDFF3:  rts
+
 LDFF4:  .byte   $4C
         .byte   $23
 LDFF6:  .byte   $DE
@@ -3216,7 +3395,9 @@ LE085:  lda     $C04D
         plp
         bcc     LE0A1
         jmp     LD1AC
+
 LE0A1:  jmp     LD180
+
 LE0A4:  bcc     LE0DB
         lda     $C056
         ldy     $C057
@@ -3247,12 +3428,15 @@ LE0C3:  sta     $9C
         sty     $A3
         plp
         jmp     LD1CC
+
 LE0DB:  cli
         rts
+
 LE0DD:  ldx     #$00
         .byte   $2C
 LE0E0:  ldx     #$0C
         jmp     LD67E
+
 LE0E5:  jsr     LDB2D
         beq     LE0DD
 LE0EA:  sei
@@ -3357,6 +3541,7 @@ LE1C8:  dec     $F7
         jsr     LE228
         jsr     LE250
         jmp     LE1C2
+
 LE1DC:  lda     RWBUF
         ldx     $C004
         sta     $F5
@@ -3391,6 +3576,7 @@ LE208:  bne     LE1FF
         lda     $F9
         sta     $C051
 LE225:  jmp     LE0FA
+
 LE228:  iny
         iny
         bne     LE249
@@ -3409,11 +3595,13 @@ LE228:  iny
         ldy     #$02
 LE249:  clc
 LE24A:  rts
+
 LE24B:  sec
         pla
         pla
 LE24E:  cli
         rts
+
 LE250:  lda     BUF1,y
         sta     PISTE
         lda     $C101,y
@@ -3421,6 +3609,7 @@ LE250:  lda     BUF1,y
         bit     $C04D
         bvs     LE24A
         jmp     XPRSEC
+
 LE264:  clc
         .byte   $24
 LE266:  sec
@@ -3471,12 +3660,14 @@ LE2B8:  lda     BUF1,x
         bne     LE2AA
 LE2CA:  jsr     XSMAP
         jmp     XSCAT
+
 LE2D0:  bcs     LE2D5
 LE2D2:  jsr     LDAB4
 LE2D5:  ldx     #$09
         jsr     LD36C
         sec
         rts
+
 LE2DC:  lda     $C108,x
         sta     $F5
         lda     $C109,x
@@ -3627,7 +3818,9 @@ LE41F:  bit     $02F1
         lda     ATMORI
         bpl     LE433
 LE430:  jmp     LD206
+
 LE433:  rts
+
 LE434:  .byte   $4C
         .byte   $23
 LE436:  .byte   $DE
@@ -3650,11 +3843,13 @@ CMD_DEL:clc
         jsr     LDB2D
         bne     LE457
         jmp     LE0DD
+
 LE457:  jsr     LD7A0
         bcc     LE473
         jsr     LE264
         bcc     LE4A7
 LE461:  rts
+
 LE462:  jsr     XAFCAR
 LE465:  jsr     LD206
         jsr     LDB41
@@ -3771,6 +3966,7 @@ LE559:  ldy     $C029,x
         cpy     #$3F
         bne     LE571
 LE56A:  jmp     LD5AC
+
 LE56D:  cpy     #$3F
         bne     LE56A
 LE571:  tya
@@ -3780,6 +3976,7 @@ LE571:  tya
         jsr     LDB2D
         bne     LE585
         jmp     LE0DD
+
 LE580:  jsr     LDB41
         beq     LE5FB
 LE585:  lda     $C025
@@ -3834,6 +4031,7 @@ LE5F0:  lda     BUF1,y
         bpl     LE5F0
         bmi     LE580
 LE5FB:  rts
+
 CMD_SEARCH:
         jsr     LD451
         jsr     LDB2D
@@ -3843,6 +4041,7 @@ CMD_SEARCH:
         beq     LE60A
         lda     #$01
 LE60A:  jmp     LD7D5
+
 LE60D:  ldy     DRVDEF
         jsr     LD39E
         beq     LE622
@@ -3852,16 +4051,22 @@ LE60D:  ldy     DRVDEF
         tay
         jsr     LD7C0
         jmp     LD398
+
 LE622:  jsr     LD7C0
         jmp     LD39E
+
         jmp     LE0DD
+
         jmp     LE2D2
+
 LE62E:  lda     #$14
         ldy     #$02
         sty     $2F
         rts
+
 LE635:  ldy     #$03
         jmp     LDC8B
+
 LE63A:  clc
         .byte   $24
 LE63C:  sec
@@ -3901,6 +4106,7 @@ LE669:  pla
         pla
         sec
         rts
+
 LE67F:  ldx     #$00
 LE681:  lda     $C210,x
         bne     LE697
@@ -3910,6 +4116,7 @@ LE681:  lda     $C210,x
         bit     $2F
         bpl     LE692
         jmp     LDC78
+
 LE692:  jsr     LE63C
         bcs     LE67F
 LE697:  lda     $C202
@@ -3919,6 +4126,7 @@ LE69F:  dec     $C202
         bit     $2F
         bmi     LE6A9
         jmp     LDC90
+
 LE6A9:  lda     #$60
         sta     LDCA8
         jsr     LDC90
@@ -3932,6 +4140,7 @@ LE6A9:  lda     #$60
         inx
 LE6BF:  stx     $F3
         jmp     LDCAD
+
 LE6C4:  ror     a
         ldx     $F3
         bne     LE6CD
@@ -3945,6 +4154,7 @@ LE6D4:  sec
 LE6D7:  tax
         sec
         jmp     LDD0E
+
 LE6DC:  bit     $2F
         bpl     LE6D7
         jsr     LE63A
@@ -3989,27 +4199,29 @@ LE6DC:  bit     $2F
 LE70A:  nop
 CMD_KEY:jsr     LE94D
         bcc     LE719
-        lda     VIA+7
-        sta     VIA+5
+        lda     V1T1L+1
+        sta     V1T1+1
         lda     #$40
         .byte   $2C
 LE719:  lda     #$00
-        sta     VIA+11
+        sta     V1ACR
 LE71E:  rts
+
 CMD_OUT:jsr     LD27F
         php
         sei
-        stx     VIA+1
-        lda     VIA
+        stx     V1DRA
+        lda     V1DRB
         and     #$EF
-        sta     VIA
+        sta     V1DRB
         ora     #$10
-        sta     VIA
+        sta     V1DRB
         plp
         lda     #$02
-LE737:  bit     VIA+13
+LE737:  bit     V1IFR
         beq     LE737
         rts
+
         .byte   $4C
         .byte   $23
 LE73F:  .byte   $DE
@@ -4047,32 +4259,37 @@ LE76D:  sbc     #$08
         adc     $31
         sta     $32
         rts
+
 LE77B:  bit     $02F1
         bpl     LE78A
         pla
         bne     LE769
-        stx     $0257
+        stx     NUMBER_OF_LINES_FOR_PRINTER
         sta     $0259
         rts
+
 LE78A:  pla
         beq     LE769
-        stx     $0256
+        stx     NUMBER_OF_COLUMN_FOR_PRINTER
         lda     #$00
         sta     $0258
 LE795:  rts
+
 CMD_RANDOM:
         beq     LE79E
         jsr     LD216
 LE79B:  jmp     LD2E2
-LE79E:  lda     VIA+4
-        ldy     VIA+5
+
+LE79E:  lda     V1T1
+        ldy     V1T1+1
         sta     $D0
         sty     $D1
-        lda     VIA+8
-        ldy     VIA+9
+        lda     V1T2
+        ldy     V1T2+1
         sta     $D2
         sty     $D3
         jmp     LE79B
+
 LE7B5:  .byte   $4C
         .byte   $23
 LE7B7:  .byte   $DE
@@ -4114,6 +4331,7 @@ LE7EF:  dex
         stx     $B0
         sty     $B1
 LE7F4:  rts
+
 CMD_QUIT:
         bne     LE7B5
         lda     $043E
@@ -4126,18 +4344,19 @@ CMD_QUIT:
         bpl     LE828
         lda     #$22
         ldy     #$EE
-        sta     $0245
-        sty     $0246
+        sta     BASIC11_IRQ_VECTOR
+        sty     BASIC11_IRQ_VECTOR+1
         lda     #$78
         ldy     #$EB
         sta     $023C
         sty     $023D
         lda     #$B2
         ldy     #$F8
-        sta     $0248
+        sta     BASIC11_IRQ_VECTOR+3
         sty     $0249
         plp
         rts
+
 LE828:  lda     #$03
         ldy     #$EC
         sta     $0229
@@ -4148,6 +4367,7 @@ LE828:  lda     #$03
         sty     $022D
         plp
 LE83D:  rts
+
         lda     $C013
         ldy     $C014
         sta     $E9
@@ -4157,6 +4377,7 @@ LE83D:  rts
         sta     $A8
         sty     $A9
 LE852:  rts
+
 CMD_STRUN:
         jsr     LD25C
         jsr     LD224
@@ -4193,6 +4414,7 @@ LE86B:  iny
         dey
         sty     $A9
         rts
+
 LE89A:  .byte   $4C
         .byte   $77
 LE89C:  .byte   $E9
@@ -4233,6 +4455,7 @@ LE8D8:  lda     $D0,y
         dey
         bpl     LE8D8
 LE8E0:  rts
+
 CMD_UNTKEN:
         jsr     LD238
         jsr     LD274
@@ -4279,6 +4502,7 @@ LE92F:  dec     $F3
         iny
         bne     LE8F0
 LE938:  jmp     LE977
+
 LE93B:  txa
         jsr     LD264
         ldy     $D0
@@ -4288,6 +4512,7 @@ LE941:  dey
         tya
         bne     LE941
         jmp     LE8D6
+
 LE94D:  ldy     #$02
 LE94F:  lda     ($E9),y
         and     #$DF
@@ -4309,9 +4534,12 @@ LE96C:  php
         jsr     LD1E3
         plp
         rts
+
 LE974:  jmp     LDE23
+
 LE977:  ldx     #$12
         jmp     LD67E
+
 LE97C:  .byte   $4C
         .byte   $20
 LE97E:  .byte   $DE
@@ -4326,6 +4554,7 @@ CMD_ERR:jsr     LE94D
         sty     $C019
         stx     $C01A
 LE998:  rts
+
 CMD_ERRGOTO:
         jsr     LD2FA
         sta     $C01C
@@ -4364,6 +4593,7 @@ LE9C3:  php
         plp
         beq     LE9DE
         jmp     LD1DC
+
 LE9DE:  dec     $EA
         ldy     #$FF
         lda     ($E9),y
@@ -4394,6 +4624,7 @@ CMD_CHKSUM:
         ldy     #$79
         ldx     #$60
         jmp     LF15E
+
         nop
         nop
         nop
@@ -4440,6 +4671,7 @@ LEA30:  inx
         stx     $F2
         ldx     #$3F
         rts
+
 LEA36:  stx     $30
         .byte   $4C
         .byte   $3E
@@ -4479,8 +4711,10 @@ LEA69:  lda     ($91),y
         dey
         bpl     LEA69
         rts
+
 LEA77:  ldx     #$0B
         jmp     LD67E
+
 LEA7C:  .byte   $4C
         .byte   $20
 LEA7E:  .byte   $DE
@@ -4528,6 +4762,7 @@ LEAD3:  txa
         ldx     $F6
         sta     $C068,x
         rts
+
 LEADA:  tya
         pha
         jsr     LD27F
@@ -4551,6 +4786,7 @@ LEAE8:  ldy     $F4
         plp
         jsr     LEB22
         jmp     LEB0E
+
 LEB0A:  plp
         jsr     L0471
 LEB0E:  pha
@@ -4565,6 +4801,7 @@ LEB0E:  pha
         jsr     LD7D2
         pla
         jmp     LD7C9
+
 LEB22:  .byte   $6C
         .byte   $F0
 LEB24:  .byte   $04
@@ -4605,6 +4842,7 @@ LEB5E:  clc
         adc     $C045
         sta     $C043
         rts
+
 LEB72:  cmp     #$2C
         beq     LEB84
         jsr     LD2FA
@@ -4617,6 +4855,7 @@ LEB84:  jsr     LD22C
         sta     $C045
         sty     $C044
 LEB90:  rts
+
 CMD_ACCENT:
         jsr     LE94D
         jsr     LDFDE
@@ -4629,6 +4868,7 @@ LEBA3:  bit     $C03D
         bvs     LEBAD
         ldx     #$05
         jmp     LD332
+
 LEBAD:  lda     #$06
         sta     $F2
         ldx     #$00
@@ -4656,6 +4896,7 @@ LEBCE:  lda     ACCENTED_FONT,x
         dec     $F2
         bne     LEBB3
 LEBDD:  rts
+
 CMD_AZERTY:
         lda     #$C0
 LEBE0:  .byte   $2C
@@ -4692,6 +4933,7 @@ CMD_LBRACKET:
         pla
         plp
         jmp     EXERAM
+
         lda     #$10
         ldy     #$07
         sta     $026B
@@ -4747,12 +4989,14 @@ LEC70:  lda     ($F7),y
 LEC7E:  ldy     #$00
         tya
         jmp     LD7DB
+
 LEC84:  inc     $F6
         lda     $F6
         cmp     $F2
         beq     LEC7E
         bne     LEC62
 LEC8E:  jmp     LDE23
+
 LEC91:  .byte   $4C
         .byte   $20
 LEC93:  .byte   $DE
@@ -4822,12 +5066,16 @@ LED19:  jsr     LED36
         sta     $026A
         lda     $F4
         jmp     LD7D8
+
 LED28:  jmp     LDE23
+
 LED2B:  jmp     LDE20
+
 LED2E:  jsr     LD238
         sta     $B8
         sty     $B9
         rts
+
 LED36:  lda     $F3
         and     #$08
         bne     LED52
@@ -4906,6 +5154,7 @@ LEDC6:  iny
         bne     LED93
 LEDD5:  dex
         jmp     LEDFC
+
 LEDD9:  iny
         cmp     #$0A
         bne     LEDED
@@ -4981,12 +5230,14 @@ LEE61:  jsr     LEE76
         cpy     $F2
         bne     LEE60
         rts
+
 LEE69:  txa
         beq     LEE72
         jsr     LEE73
         dex
         bne     LEE69
 LEE72:  rts
+
 LEE73:  lda     #$08
         .byte   $2C
 LEE76:  lda     #$09
@@ -5002,12 +5253,14 @@ LEE79:  pla
         beq     LEE79
 LEE8C:  pla
         rts
+
 LEE8E:  ldy     #$02
 LEE90:  lda     $D0,y
         sta     ($B8),y
         dey
         bpl     LEE90
 LEE98:  rts
+
 CMD_USING:
         jsr     LD216
         jsr     LD2D2
@@ -5090,22 +5343,29 @@ LEF2F:  dey
         jsr     LD22C
         jsr     LD238
         jmp     LE8D6
+
 LEF41:  lda     #$00
         ldy     #$C1
         jmp     XAFSTR
+
 LEF48:  jsr     LF02B
         cmp     #$5E
         bne     LEF68
+; $ef4f
+display_exp_scientific_notation:
         ldx     #$FD
 LEF51:  lda     LFFDA,x
         .byte   $2C
 LEF55:  lda     #$20
         .byte   $2C
 LEF58:  lda     $C4
-LEF5A:  sta     BUF1,y
+; $ef5a
+display_char_in final_string:
+        sta     BUF1,y
         iny
         bne     LEF63
         jmp     LE977
+
 LEF63:  inx
         bne     LEF51
         beq     LEF18
@@ -5133,6 +5393,7 @@ LEF83:  cmp     #$25
 LEF93:  dec     $F3
         bpl     LEF9A
         jmp     LEF18
+
 LEF9A:  lda     $C5,x
         and     #$7F
         sta     BUF1,y
@@ -5146,8 +5407,11 @@ LEFA7:  jsr     LF02B
         cmp     #$0A
         bcs     LEFB3
         rts
+
 LEFB3:  jmp     LDE20
+
 LEFB6:  jmp     LE977
+
 LEFB9:  cmp     #$21
         bne     LEFFC
         jsr     LEFA7
@@ -5191,7 +5455,8 @@ LEFFC:  cmp     #$40
         bcc     LEFC5
 LF007:  cmp     #$26
         beq     LF00E
-        jmp     LEF5A
+        jmp     display_char_in final_string
+
 LF00E:  jsr     LF02B
         cmp     #$30
         bne     LF017
@@ -5206,16 +5471,19 @@ LF01A:  lda     $C5,y
         bne     LF01A
 LF026:  stx     $F6
 LF028:  jmp     LEF1A
+
 LF02B:  ldy     $F4
         lda     ($91),y
         inc     $F4
         ldy     $F5
         ldx     #$FF
 LF035:  rts
+
 CMD_LUSING:
         jsr     LE7C5
         jsr     CMD_USING
         jmp     LE7D6
+
 LF03F:  ldx     #$05
 LF041:  lda     LCD1A,x
         sta     $BFDF,x
@@ -5240,7 +5508,9 @@ LF041:  lda     LCD1A,x
         lda     $021F
         bne     LF078
         jmp     LD16F
+
 LF078:  rts
+
 CMD_LINE:
         jsr     LF03F
         jsr     LD216
@@ -5257,6 +5527,7 @@ LF088:  stx     $F2
         jsr     LD2F2
         jsr     LD2DA
         jmp     LF0A1
+
 LF09E:  jsr     LD2EA
 LF0A1:  lda     #$E5
         ldy     #$BF
@@ -5318,6 +5589,7 @@ LF0F6:  ldx     $F6
         dec     $F5
         bne     LF0F6
 LF120:  rts
+
 CMD_VUSER:
         ldy     #$1B
 LF123:  .byte   $2C
@@ -5402,6 +5674,7 @@ LF16D:  ldx     #$0C
         pla
         pla
 LF18C:  jmp     LD1DC
+
 LF18F:  jsr     XPMAP
         lda     $C207
         sta     $C04B
@@ -5433,6 +5706,7 @@ LF1BF:  lda     SEDKERN_START,x
         cmp     #$5B
         beq     LF1D2
         jmp     LD39E
+
 LF1D2:  ldx     #$63
         lda     #$30
         ldy     #$00
@@ -5441,6 +5715,7 @@ LF1D2:  ldx     #$63
         jsr     XDLOAD
         jsr     LD39E
         jmp     LC404
+
 XDLOAD: stx     $F5
         sta     $C004
         lda     #$00
@@ -5459,6 +5734,7 @@ LF206:  iny
         bne     LF1F0
         cli
         rts
+
 LF20D:  .byte   $4C
         .byte   $E0
 LF20F:  .byte   $E0
@@ -5562,9 +5838,11 @@ LF2CA:  pha
         pla
         cpy     #$7F
         rts
+
 LF2E5:  plp
         jsr     LF325
         jmp     LF320
+
 LF2EC:  lsr     $F2
 LF2EE:  jsr     XAFCAR
         ldy     $0268
@@ -5579,6 +5857,7 @@ LF2FC:  bit     $F2
         bne     LF2EE
 LF306:  bit     $F2
 LF308:  rts
+
 LF309:  lda     #$1E
         jsr     XAFCAR
         jsr     LD206
@@ -5593,6 +5872,7 @@ LF311:  jsr     LF2CA
 LF320:  pla
         sta     $026A
 LF324:  rts
+
 LF325:  clc
         .byte   $24
 LF327:  sec
@@ -5675,8 +5955,11 @@ LF3BC:  lda     #$09
         jsr     LF2CA
         bne     LF3BC
         jmp     LF33C
+
 LF3CB:  jmp     LE977
+
 LF3CE:  rts
+
 LF3CF:  lda     $0A
         asl     a
         adc     #$08
@@ -5701,6 +5984,7 @@ LF3E3:  clc
         pla
         ldy     #$00
         rts
+
 LF3F3:  ldy     #$00
         lda     $9F
         cmp     $A1
@@ -5727,6 +6011,7 @@ LF41C:  lda     LCD25,y
         dey
         bpl     LF41C
 LF424:  rts
+
 LF425:  pha
         sty     $F3
         stx     $F9
@@ -5775,6 +6060,7 @@ LF456:  stx     $CE
         tay
         pla
         jmp     LD15C
+
 LF473:  pha
         jsr     LF3F3
         pla
@@ -5801,9 +6087,12 @@ LF487:  cpx     #$40
         .byte   $2C
 LF49B:  ldx     #$0E
         jmp     LD67E
+
 LF4A0:  bcs     LF49B
 LF4A2:  jmp     LD39E
+
 LF4A5:  jmp     LDE20
+
 LF4A8:  lda     #$88
         ldy     #$00
         jsr     LF3E3
@@ -5832,12 +6121,14 @@ LF4A8:  lda     #$88
         lda     (L0000),y
         sta     $0B
         rts
+
 LF4DC:  clc
         adc     $02
         sta     $02
         bcc     LF4E5
         inc     $03
 LF4E5:  rts
+
 LF4E6:  lda     #$80
         .byte   $2C
 LF4E9:  lda     #$00
@@ -5880,6 +6171,7 @@ LF52E:  lda     $F2
         sta     $F4
         sty     $F5
         rts
+
 LF537:  ldy     #$09
         lda     $C082
         bne     LF52E
@@ -5944,13 +6236,16 @@ LF5A6:  sta     ($F4),y
         dey
         bpl     LF5A6
         rts
+
 LF5AC:  bmi     LF5B4
         lsr     $C082
         bcc     LF5B5
         clc
 LF5B4:  rts
+
 LF5B5:  ldx     #$13
         jmp     LD67E
+
 LF5BA:  jsr     LF640
         jsr     LF3F3
         lda     #$D3
@@ -5985,6 +6280,7 @@ LF5F7:  sty     $F5
         ldy     $03
         jsr     LD2BA
         jmp     LF620
+
         nop
         nop
 LF60A:  asl     a
@@ -6001,6 +6297,7 @@ LF60A:  asl     a
 LF61D:  jsr     LD254
 LF620:  lda     $29
         jmp     LD1FE
+
 LF625:  lda     $F5
         jsr     LD264
         tay
@@ -6011,6 +6308,7 @@ LF62D:  dey
         tya
         bne     LF62D
 LF635:  jmp     LEE8E
+
         nop
         nop
         nop
@@ -6028,6 +6326,7 @@ LF644:  sta     $C075,x
         sta     $C07C
         jsr     LD39E
         jmp     LF658
+
 LF655:  jsr     LD398
 LF658:  beq     LF6CC
         cmp     #$80
@@ -6044,10 +6343,12 @@ LF66C:  jsr     LD398
         stx     $C07B
         lda     #$29
         jmp     LD22E
+
 LF67A:  lda     $C07F
 LF67D:  sta     $C07F
         asl     a
         jmp     LD21C
+
 LF684:  lda     #$00
         sta     $F2
         sta     $C085
@@ -6083,6 +6384,7 @@ LF6AF:  asl     $33
         inc     $07
 LF6CA:  ldy     #$00
 LF6CC:  rts
+
 LF6CD:  jsr     LF4A8
         clc
         lda     $08
@@ -6134,6 +6436,7 @@ LF6F9:  lda     $08
         ldy     $C084
         jsr     LF736
         jmp     LF736
+
 LF727:  jsr     LF4A8
         lda     $F7
         sta     $05
@@ -6157,7 +6460,9 @@ LF736:  ldx     #$88
         inc     $05
         ldy     #$02
 LF756:  jmp     LDA75
+
 LF759:  rts
+
 LF75A:  sta     $C058
         sty     $C059
         ora     $C059
@@ -6247,6 +6552,7 @@ LF807:  lda     (L0000),y
         jsr     XTVNM
         bne     LF819
         jmp     LE0DD
+
 LF819:  jsr     LDAEE
         jsr     XSMAP
         jsr     XSCAT
@@ -6259,6 +6565,7 @@ LF819:  jsr     LDAEE
         sta     SECTEUR
         jsr     LF85F
         jmp     XSVSEC
+
 LF838:  ldy     #$0A
         inc     $03
         lda     ($02),y
@@ -6280,11 +6587,13 @@ LF84C:  ldy     #$15
         adc     #$00
         sta     (L0000),y
         jmp     XLIBSE
+
 LF85F:  lda     $04
         sta     RWBUF
         lda     $05
         sta     $C004
         rts
+
 LF86A:  inc     $05
         clc
         ldy     #$02
@@ -6298,6 +6607,7 @@ LF86A:  inc     $05
         sta     $F2
         lda     #$00
         jmp     LF425
+
 LF885:  sec
         sbc     $9E
 LF888:  tax
@@ -6305,6 +6615,7 @@ LF888:  tax
         sbc     $9F
         tay
         rts
+
         jsr     LD24C
         lda     $D4
         ldx     $D3
@@ -6315,6 +6626,7 @@ LF888:  tax
         cpx     #$FF
         beq     LF8A7
 LF8A0:  jmp     LDE20
+
 LF8A3:  cpx     #$00
         bne     LF8A0
 LF8A7:  jsr     LF473
@@ -6339,7 +6651,9 @@ LF8C6:  tay
         tya
         ldy     $F2
         jmp     LD254
+
 LF8CF:  jmp     LE0E0
+
 LF8D2:  jsr     LFD0E
         beq     LF8C6
         bit     $D3
@@ -6351,6 +6665,7 @@ LF8DE:  cpx     $20
         bne     LF8EA
         jsr     LF96B
         jmp     XPRSEC
+
 LF8EA:  bcs     LF8FD
         jsr     LF91F
         php
@@ -6362,6 +6677,7 @@ LF8F4:  lda     ($06),y
         bne     LF8F4
         plp
 LF8FC:  rts
+
 LF8FD:  jsr     LED2E
         jsr     LFDD9
         txa
@@ -6375,6 +6691,7 @@ LF8FD:  jsr     LED2E
         beq     LF8FC
         jsr     LD22C
         jmp     LF8FD
+
 LF91D:  clc
         .byte   $24
 LF91F:  sec
@@ -6391,8 +6708,10 @@ LF91F:  sec
         bcc     LF93B
         ldx     #$10
         jmp     LD67E
+
 LF939:  plp
         rts
+
 LF93B:  ldy     #$04
         lda     $33
         sta     ($04),y
@@ -6408,6 +6727,7 @@ LF93B:  ldy     #$04
         tay
         pla
         jmp     LDA9E
+
         jsr     LF47D
         jsr     LD22C
         jsr     LF4A8
@@ -6418,6 +6738,7 @@ LF93B:  ldy     #$04
         pla
         cmp     #$01
         rts
+
 LF96B:  jsr     LD27F
         stx     PISTE
         jsr     LD22C
@@ -6432,6 +6753,7 @@ LF982:  jsr     LF4A8
         sta     RWBUF
         sty     $C004
 LF98F:  rts
+
         jsr     LE60D
         .byte   $4C
         .byte   $4C
@@ -6464,12 +6786,14 @@ LF9BB:  cmp     $6C20,x
         jsr     LD7ED
         pla
         jmp     LD7EA
+
 LF9C8:  .byte   $4C
         .byte   $20
 LF9CA:  dec     $5620,x
         sbc     $06D0,y
         jsr     LF96B
         jmp     XSVSEC
+
         bcs     LF9EF
 LF9D8:  jsr     LF91D
         php
@@ -6483,6 +6807,7 @@ LF9E0:  lda     ($02),y
         jsr     LF727
         plp
         rts
+
 LF9EF:  jsr     LD224
         jsr     LFD0E
         bne     LFA1B
@@ -6515,7 +6840,9 @@ LFA2B:  jsr     LD39E
         beq     LFA36
         jsr     LD22C
         jmp     LF9EF
+
 LFA36:  jmp     LFD46
+
 LFA39:  stx     $C07E
         lda     $06
         ldy     $07
@@ -6547,6 +6874,7 @@ LFA74:  ldy     #$06
         lda     DRIVE
         sta     (L0000),y
 LFA7B:  rts
+
 LFA7C:  cmp     #$52
         bne     LFA92
         lda     #$00
@@ -6555,7 +6883,9 @@ LFA7C:  cmp     #$52
         bne     LFA7B
         jsr     LD22C
         jmp     LF9D8
+
 LFA8F:  jmp     LDE23
+
 LFA92:  cmp     #$53
         bne     LFA8F
         lda     #$80
@@ -6576,6 +6906,7 @@ LFA9D:  php
         lda     #$FF
         sta     ($02),y
         jmp     LFD46
+
 LFAB8:  .byte   $4C
         .byte   $44
 LFABA:  sbc     $C020,x
@@ -6585,6 +6916,7 @@ LFAC0:  jsr     LF47D
         jsr     LF4A8
         bmi     LFA7B
         jmp     LE0E0
+
 LFACB:  pha
         tya
         pha
@@ -6619,8 +6951,11 @@ LFAD6:  dey
         sta     (L0000),y
         sta     $C083
         rts
+
 LFB02:  jmp     LE0E0
+
 LFB05:  jmp     LDE20
+
 LFB08:  sta     $0B
         sty     $F9
         jsr     LD44F
@@ -6679,6 +7014,7 @@ LFB70:  jsr     LF86A
         jsr     LFA74
         plp
 LFB8C:  rts
+
         beq     LFBA0
 LFB8F:  jsr     LF47D
         jsr     LFBAF
@@ -6686,6 +7022,7 @@ LFB8F:  jsr     LF47D
         beq     LFBAE
         jsr     LD22C
         jmp     LFB8F
+
 LFBA0:  jsr     LF3F3
         lda     #$63
         sta     $0A
@@ -6693,12 +7030,15 @@ LFBA7:  jsr     LFBAF
         dec     $0A
         bpl     LFBA7
 LFBAE:  rts
+
 LFBAF:  jsr     LF3CF
         tya
         iny
         sta     ($F2),y
         jmp     LF4E6
+
 LFBB9:  jmp     LE0E0
+
 LFBBC:  .byte   $4C
         .byte   $23
 LFBBE:  dec     $7D20,x
@@ -6763,13 +7103,16 @@ LFC35:  lda     $C076,y
         bne     LFC48
         stx     $C081
         rts
+
 LFC48:  jsr     LD22E
         bne     LFBD6
         lda     $0A
         sta     $C080
 LFC52:  clc
         rts
+
 LFC54:  jmp     LDE20
+
 LFC57:  beq     LFC69
         bcs     LFC6E
         ldx     $C083
@@ -6824,13 +7167,16 @@ LFCA9:  tya
         lda     $D3
         bne     LFC54
         rts
+
 LFCCA:  iny
         lda     $D3
         sta     ($02),y
         rts
+
 LFCD0:  ldx     $02
         ldy     $03
         jmp     LD2C2
+
 LFCD7:  php
         jsr     LD274
         sta     $D0
@@ -6851,6 +7197,7 @@ LFCEE:  cpy     $D0
         iny
         bne     LFCEE
 LFCF9:  rts
+
 LFCFA:  ldy     $D0
         beq     LFD0D
         dey
@@ -6861,6 +7208,7 @@ LFCFA:  ldy     $D0
         sta     ($02),y
         bne     LFCFA
 LFD0D:  rts
+
 LFD0E:  jsr     LF4A8
         ldy     #$03
         lda     (L0000),y
@@ -6875,6 +7223,7 @@ LFD0E:  jsr     LF4A8
         lda     ($02),y
         cmp     #$FF
 LFD29:  rts
+
 LFD2A:  jsr     LF4A8
         ldy     #$05
         lda     $C088
@@ -6913,7 +7262,9 @@ LFD46:  sec
         plp
         bcc     LFD70
         jmp     LDA9E
+
 LFD70:  jmp     LDA6D
+
 LFD73:  jsr     LFDCC
         sta     ($02),y
         sec
@@ -6962,14 +7313,17 @@ LFDC3:  tya
         tay
         lda     ($02),y
         rts
+
 LFDCC:  ldy     #$05
         pha
         lda     (L0000),y
         tay
         pla
         rts
+
 LFDD4:  ldx     #$0F
         jmp     LD67E
+
 LFDD9:  jsr     LFD0E
         beq     LFDD4
         ldy     #$00
@@ -6993,6 +7347,7 @@ LFDF0:  jsr     LFD7A
         iny
         lda     ($06),y
         rts
+
 LFE06:  nop
         jsr     LFAC0
         lda     #$FF
@@ -7016,8 +7371,10 @@ LFE29:  dec     $33
         beq     LFE36
         jsr     LFDD9
         jmp     LFE1D
+
 LFE36:  plp
         rts
+
 LFE38:  ldy     #$00
         lda     ($06),y
         jsr     LFD73
@@ -7034,6 +7391,7 @@ LFE4A:  jsr     LFD73
         dec     $F8
         bne     LFE4A
         rts
+
         lsr     $F2
         lsr     $F4
         ldx     #$0C
@@ -7054,6 +7412,7 @@ LFE76:  ror     $F4
         cpy     #$3F
         beq     LFE5E
 LFE80:  jmp     LD5AC
+
 LFE83:  bit     $F2
         bpl     LFE93
         ldx     #$0C
@@ -7064,6 +7423,7 @@ LFE89:  lda     $C09D,x
         bne     LFE89
 LFE93:  cli
 LFE94:  rts
+
         .byte   $20
         .byte   $C5
 LFE97:  .byte   $E7
@@ -7076,6 +7436,7 @@ LFEA0:  jsr     LFF3D
         cmp     #$03
         bne     LFEA0
         rts
+
 LFEAC:  jsr     LFD0E
         beq     LFEC7
         jsr     LFDD9
@@ -7090,6 +7451,7 @@ LFEBB:  iny
         bne     LFEBB
         beq     LFE9B
 LFEC7:  jmp     LE7D6
+
 LFECA:  clc
         lda     $06
         ldy     $07
@@ -7115,6 +7477,7 @@ LFEE6:  jsr     LFF3D
 LFEF8:  jsr     LFF1B
         sty     $F2
         jmp     LFEE6
+
 LFF00:  jsr     LF4A8
         lda     #$80
         sta     ($06),y
@@ -7130,6 +7493,7 @@ LFF11:  sta     ($06),y
         bne     LFF11
         ldy     #$02
 LFF1A:  rts
+
 LFF1B:  sta     ($06),y
         jsr     XAFCAR
         iny
@@ -7142,57 +7506,104 @@ LFF25:  jsr     LFE38
         jsr     LFD46
         ldy     #$02
         jmp     LFF00
+
 LFF37:  jsr     LFF25
         jmp     LFD46
+
 LFF3D:  jsr     LD845
         bpl     LFF3D
         rts
+
 ; System Vectors
 SEDORIC_VECTORS:
         jmp     LED36
+
         jmp     LD398
+
         jmp     LD39E
+
         jmp     LD44F
+
         jmp     LD451
+
         jmp     LD364
+
         jmp     LF3F3
+
         jmp     LF4A8
+
         jmp     LFDD9
+
         jmp     LFE38
+
         jmp     LFD46
+
         jmp     XAFCAR
+
         jmp     XAFHEX
+
         jmp     XAFSTR
+
         jmp     XROM
+
         jmp     LE0EA
+
         jmp     LE0E5
+
         jmp     LDE28
+
         jmp     LDFE6
+
         jmp     LDE9C
+
         jmp     LE266
+
         jmp     XCREAY
+
         jmp     XDETSE
+
         jmp     XLIBSE
+
         jmp     XWDESC
+
         jmp     XTRVCA
+
         jmp     LDBA5
+
         jmp     LDB41
+
         jmp     XTVNM
+
         jmp     LDB2D
+
         jmp     LDB07
+
         jmp     LDAFE
+
         jmp     LDAEE
+
         jmp     LDACE
+
         jmp     XSVSEC
+
         jmp     LDA9E
+
         jmp     LDA91
+
         jmp     XSCAT
+
         jmp     XSMAP
+
         jmp     XPRSEC
+
         jmp     LDA6D
+
         jmp     LDA5D
+
         jmp     XPMAP
+
         jmp     XRWTS
+
 COPYRIGHT_TEXT:
         .byte   "SEDORIC 1.0 par F.B"
 
