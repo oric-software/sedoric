@@ -8,7 +8,6 @@ GLOBAL {
 	PAGELENGTH	0;	# No paging
 };
 
-
 LABEL { NAME "SEDORIC_FTYPE"; ADDR $F9; Size 1; 
 comment "FTYPE: #08 si OPEN R (b3 à 1) et #10 si OPEN S (b4 à 1) (ce sont les types SEDORIC: les 'pseudo-fichiers' d'accès Disques n'en ont pas)";};
 
@@ -213,11 +212,11 @@ RANGE {
 };
 
 # rw buffer
-RANGE {
-	TYPE	BYTETABLE;
-	START	$c003;
+LABEL {
+	
+	ADDR	$c003;
 	NAME	"SEDORIC_RWBUF";
-	END	    $c004;
+	Size 2;
 };
 
 RANGE {
@@ -228,6 +227,14 @@ RANGE {
 	comment "b5=0 write fault if b5=1 read fault";
 };
 
+
+LABEL {
+	
+	ADDR	$c006;
+	NAME	"SEDORIC_XRWTS_RERY";
+	Size   1;
+	comment "XRWTS (nombre de tentatives possibles en cas de secteur non trouvé)";
+};
 
 RANGE {
 	TYPE	BYTETABLE;
@@ -281,6 +288,16 @@ RANGE {
 	NAME	"SEDORIC_EXTNB";
 	END	$c015;
 };
+
+
+LABEL {
+
+	ADDR	$c017;
+	NAME	"SEDORIC_IO_ERROR";
+	SIZE	1;
+	COMMENT	"number of I/O error";
+};
+
 
 LABEL {
 
@@ -613,6 +630,15 @@ LABEL {
 	NAME	"XRWTS_INTERNAL";
 	ADDR	$cfe9;
 };
+
+LABEL {
+	NAME	"XRWTS_INTERNAL_LOOP";
+	ADDR	$cfeb;
+	comment "Entrée secondaire pour rebouclage";
+};
+
+
+
 LABEL {
 	NAME	"XRWTS_ONCE";
 	ADDR	$cff3;
@@ -636,13 +662,9 @@ Range {
 	TYPE	Code;
 	Start	$D0EA;
 	NAME	"SEDORIC_TEST_TRACK_UNDER_HEAD";
-	comment "Test de la piste sous la tête";
+	comment "Test de la piste sous la tête. Bug ? lda $20xx";
 	END		$D120;
 };
-
-
-
-
 
 Range {
 	TYPE	Code;
