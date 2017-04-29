@@ -1,0 +1,7 @@
+LoadDiskTemplate SEDORIC4.dsk
+
+SaveFile "extract/sedoric4_kern.bin"  $00 $05 $3C  ; Name Track Sector Lenght adress
+
+SaveFile "extract/sedoric4_renum_delete_move.bin"  $03 $00 $3  ; Name Track Sector Lenght adress
+
+SaveFile "extract/sedoric4_TABDRV_MODCLA_DEFNUM_DEFPAS.bin"  $14 $01 $1  ; Name Track Sector Lenght adress

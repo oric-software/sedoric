@@ -1,31 +1,58 @@
 # global defs
 GLOBAL {
-#	STARTADDR	$c300;
 	STARTADDR	$c400;
 	CPU		"6502";
-	OUTPUTNAME	"sedkern.s";
-#	INPUTNAME		"SEDKERN.bin";
-	INPUTNAME		"SEDKERN.TAP";
-	INPUTOFFS		25;	# skip TAPE header
+	OUTPUTNAME		"build/sedoric4_kernel.s";
+	INPUTNAME		"extract/sedoric4_kern.bin";
+	COMMENTS		4;
 	PAGELENGTH	0;	# No paging
 };
 
-#RANGE {
-#	NAME	"IO";
-#	START	$300;
-#	SIZE	$100;
-#	TYPE	BYTETABLE;
-#};
+
+LABEL { NAME "SEDORIC_FTYPE"; ADDR $F9; Size 1; 
+comment "FTYPE: #08 si OPEN R (b3 à 1) et #10 si OPEN S (b4 à 1) (ce sont les types SEDORIC: les 'pseudo-fichiers' d'accès Disques n'en ont pas)";};
+
+
+
+LABEL { NAME "BASIC11_INTERPRETER_VECTOR";  ADDR  $f0; Size 2; };
+
 
 LABEL {
 	NAME	"STACK";
 	ADDR	$0100;
 	SIZE	255;
 };
-LABEL { NAME "BASIC11_IRQ_VECTOR";     ADDR  $0245;  Size 4;  };
 
-LABEL { NAME "NUMBER_OF_COLUMN_FOR_PRINTER"; ADDR $0256; Size 1;  };
-LABEL { NAME "NUMBER_OF_LINES_FOR_PRINTER";  ADDR $0257; Size 1;  };
+
+LABEL { NAME "BASIC11_KEYBOARD_MATRIX";              ADDR $0208; Size 2; comment "For keyboard decoding";};
+LABEL { NAME "BASIC11_PATTERN_ARG";                  ADDR $020C; Size 1; };
+LABEL { NAME "BASIC11_LOWERCASE_UPPERCASE";          ADDR $0213; Size 1; };
+LABEL { NAME "BASIC11_MEMORY_SIZE";                  ADDR $0220; Size 1; };
+LABEL { NAME "BASIC11_KEYBOARD_GET_VECTOR";          ADDR $023C; Size 2; comment "Vecteur Prendre un caractère au clavier (EB78 ATMOS et 045B SEDORIC)";};
+LABEL { NAME "BASIC11_IRQ_VECTOR";                   ADDR $0245; Size 2; comment "Vecteur IRQ (EE22 ATMOS et 0488 SEDORIC)";};
+LABEL { NAME "BASIC10_IRQ_VECTOR";                   ADDR $0229; Size 2; comment "Vecteur IRQ Oric -1";};
+LABEL { NAME "BASIC10_IRQ2_VECTOR";                  ADDR $022C; Size 2; comment "Vecteur IRQ Oric -1";};
+LABEL { NAME "BASIC11_X";                            ADDR $0248; Size 2; comment "Vecteur NMI (F8B2 ATMOS et 04C4 SEDORIC)";};
+LABEL { NAME "BASIC11_KEYBOARD_DURATION_REPEAT";     ADDR $024E; Size 1; comment "Only on atmos";};
+LABEL { NAME "BASIC11_KEYBOARD_REPEAT";              ADDR $024F; Size 1; comment "Only on atmos";};
+LABEL { NAME "BASIC11_NUMBER_OF_COLUMN_FOR_PRINTER"; ADDR $0256; Size 1; };
+LABEL { NAME "BASIC11_NUMBER_OF_LINES_FOR_PRINTER";  ADDR $0257; Size 1; };
+LABEL { NAME "BASIC11_CLOADING_SPEED";               ADDR $024D; Size 1; }; #slow =1 fast=0
+LABEL { NAME "BASIC11_X_TEXT";                       ADDR $0268; Size 1; };
+LABEL { NAME "BASIC11_Y_TEXT";                       ADDR $0269; Size 1; };				
+LABEL { NAME "BASIC11_FLG";                          ADDR $026A; Size 1; };
+LABEL { NAME "BASIC11_COLOR_CURSOR";                 ADDR $0271; Size 1; comment "Couleur du curseur (#01 ATMOS et #00 SEDORIC)";};
+LABEL { NAME "BASIC11_BLINK_CURSOR";                 ADDR $0274; Size 2; comment "Clignotement curseur (#0004 ATMOS et #000B SEDORIC)";};
+LABEL { NAME "BASIC11_TIMER3_VALUE";                 ADDR $0276; Size 2; comment "Timer 3 (#6B81 ATMOS et #F6D7 SEDORIC)";};
+LABEL { NAME "BASIC11_DUNNO_VALUE";                  ADDR $02A0; Size 1; comment "(#FF ATMOS et #05 SEDORIC)";};
+LABEL { NAME "BASIC11_DUNNO_VALUE2";                 ADDR $02BE; Size 1; comment "(#80 ATMOS et #FF SEDORIC)";};
+LABEL { NAME "BASIC11_HIMEM_MAX_ADRESS";             ADDR $02C1; Size 2; comment "X";};
+LABEL { NAME "BASIC11_LAST_KEY_PRESSED";             ADDR $02DF; Size 1; comment "X";};
+LABEL { NAME "BASIC11_PARAMS";                       ADDR $02E0; Size 8; };		
+LABEL { NAME "BASIC11_BANG_VECTOR";                  ADDR $02F5; Size 2; comment "Vecteur ! (D336 ATMOS et 0467 SEDORIC)";};
+LABEL { NAME "BASIC11_ESPERLUETTE_VECTOR";           ADDR $02FC; Size 2; comment "Vecteur &() (D336 ATMOS et 0461 SEDORIC)";};
+
+
 
 #
 # MICRODISC I/O
@@ -102,13 +129,13 @@ LABEL {
 };
 
 LABEL {
-	NAME	"EXERAM";
+	NAME	"SEDORIC_EXERAM";
 	ADDR	$4ec;
 	SIZE	3;
 };
 
 LABEL {
-	NAME	"EXEVEC";
+	NAME	"SEDORIC_EXEVEC";
 	ADDR	$4ef;
 	SIZE	3;
 };
@@ -138,19 +165,19 @@ LABEL {
 };
 
 LABEL {
-	NAME	"FLAGIF";
+	NAME	"SEDORIC_FLAGIF";
 	ADDR	$4fc;
 	COMMENT	"b7=1 if inside IF";
 };
 
 LABEL {
-	NAME	"NOERROR";
+	NAME	"SEDORIC_IDERROR";
 	ADDR	$4fd;
-	COMMENT	"Number of Error";
+	COMMENT	"id of Error";
 };
 
 LABEL {
-	NAME	"NOLIGN";
+	NAME	"SEDORIC_NOLIGN";
 	ADDR	$4fe;
 	COMMENT	"Line of Error";
 	SIZE	2;
@@ -165,7 +192,7 @@ LABEL {
 RANGE {
 	TYPE	BYTETABLE;
 	START	$c000;
-	NAME	"DRIVE";
+	NAME	"SEDORIC_DRIVE";
 	END	$c000;
 };
 
@@ -173,7 +200,7 @@ RANGE {
 RANGE {
 	TYPE	BYTETABLE;
 	START	$c001;
-	NAME	"PISTE";
+	NAME	"SEDORIC_TRACK";
 	END	$c001;
 };
 
@@ -181,7 +208,7 @@ RANGE {
 RANGE {
 	TYPE	BYTETABLE;
 	START	$c002;
-	NAME	"SECTEUR";
+	NAME	"SEDORIC_SECTOR";
 	END	$c002;
 };
 
@@ -189,14 +216,14 @@ RANGE {
 RANGE {
 	TYPE	BYTETABLE;
 	START	$c003;
-	NAME	"RWBUF";
+	NAME	"SEDORIC_RWBUF";
 	END	    $c004;
 };
 
 RANGE {
 	TYPE	BYTETABLE;
 	START	$c005;
-	NAME	"type_of_error";
+	NAME	"SEDORIC_type_of_error";
 	END	    $c005;
 	comment "b5=0 write fault if b5=1 read fault";
 };
@@ -205,97 +232,210 @@ RANGE {
 RANGE {
 	TYPE	BYTETABLE;
 	START	$c007;
-	NAME	"number_of_retry";
+	NAME	"SEDORIC_number_of_retry";
 	END	    $c007;
 };
 
 RANGE {
 	TYPE	BYTETABLE;
 	START	$c009;
-	NAME	"DRVDEF";
+	NAME	"SEDORIC_DRVDEF";
 	END	$c009;
 };
 
 RANGE {
 	TYPE	BYTETABLE;
 	START	$c00a;
-	NAME	"DRVSYS";
+	NAME	"SEDORIC_DRVSYS";
 	END	$c00a;
 };
+
+LABEL {
+	
+	ADDR	$c00B;
+	NAME	"SEDORIC_ACTIVATE_DRIVE_AND_TRACK";
+	Size   2;
+	comment "activation drive et piste  contains $00 $0b";
+};
+
+
+
 
 RANGE {
 	TYPE	ADDRTABLE;
 	START	$c00d;
-	NAME	"EXTER";
+	NAME	"SEDORIC_EXTER";
 	END	$c00e;
 };
 
 RANGE {
 	TYPE	ADDRTABLE;
 	START	$c00f;
-	NAME	"EXTMS";
+	NAME	"SEDORIC_EXTMS";
 	END	$c010;
 };
 
 RANGE {
 	TYPE	BYTETABLE;
 	START	$c015;
-	NAME	"EXTNB";
+	NAME	"SEDORIC_EXTNB";
 	END	$c015;
 };
+
+LABEL {
+
+	ADDR	$c018;
+	NAME	"SEDORIC_FLAGERR";
+	SIZE	1;
+	COMMENT	"flag ERR (b7 à 1 si SET, à 0 si OFF)";
+};
+
+LABEL {
+
+	ADDR	$c01D;
+	NAME	"SEDORIC_ERRVEC";
+	SIZE	2;
+	COMMENT	"adresse de traitement des erreurs (D685 par ex)";
+};
+
+
+
+
+
 
 RANGE {
 	TYPE	BYTETABLE;
 	START	$c024;
-	NAME	"ATMORI";
-	END	$c024;
+	NAME	"SEDORIC_ATMORI";
+	END		$c024;
 };
 
-# general usage buffers
 RANGE {
 	TYPE	BYTETABLE;
-	START	$c100;
-	NAME	"BUF1";
-	END	$c1ff;
+	START	$C028;
+	NAME	"SEDORIC_BUFNOM";
+	END		$c034;
+};
+
+
+LABEL {
+
+	ADDR	$c039;
+	NAME	"SEDORIC_TABDRV";
+	SIZE	4;
+	COMMENT	"TABDRV D2 D2 D2 D2 table d'activation des lecteurs (4 lecteurs double face, 82 pistes par face)";
+};
+
+LABEL {
+
+	ADDR	$c03D;
+	NAME	"SEDORIC_MODCLA";
+	SIZE	1;
+	COMMENT	"mode clavier (b6=ACCENT, b7=AZERTY)";
+};
+
+
+
+
+
+LABEL {
+
+	ADDR	$c048;
+	NAME	"SEDORIC_COMMAND_TYPE_LAUNCHED";
+	SIZE	1;
+	COMMENT	"equal to 0. type de code de fonction: * b6=0 si commande SEDORIC (RAM overlay visée) * b6=1 si commande BASIC (ROM visée) * b7=0 si commande re-définissable ou pré-définie * b7=1 dans tous les autres cas";
+};
+
+LABEL {
+	ADDR	$C066;
+	NAME	"SEDORIC_USER_COMMAND_1_VECTOR";
+	SIZE	3;
+	COMMENT	"$23 $DE $80";
+};
+
+LABEL {
+	ADDR	$C069;
+	NAME	"SEDORIC_USER_COMMAND_2_VECTOR";
+	SIZE	3;
+	COMMENT	"$23 $DE $80";
+};
+
+LABEL {
+	ADDR	$C06C;
+	NAME	"SEDORIC_USER_COMMAND_3_VECTOR";
+	SIZE	3;
+	COMMENT	"$23 $DE $80";
+};
+
+LABEL {
+	ADDR	$C06F;
+	NAME	"SEDORIC_USER_COMMAND_4_VECTOR";
+	SIZE	3;
+	COMMENT	"$23 $DE $80";
+};
+
+LABEL {
+	ADDR	$C075;
+	NAME	"SEDORIC_BACKUP_CHAR_LINPUT";
+	SIZE	3;
+	COMMENT	"$2e sauvegarde de caractère pour LINPUT";
+
+};
+
+
+# general usage buffers
+LABEL {
+	#TYPE	BYTETABLE;
+	ADDR	$c100;
+	NAME	"SEDORIC_BUF1";
+	SIZE	255;
+	#END	$c1ff;
 	COMMENT	"buffer for descriptors";
 };
-RANGE {
-	TYPE	BYTETABLE;
-	START	$c200;
-	NAME	"BUF2";
-	END	$c2ff;
+
+
+
+LABEL {
+	#TYPE	BYTETABLE;
+	ADDR	$c200;
+	NAME	"SEDORIC_BUF2";
+	#END	$c2ff;
+	SIZE 	255;
 	COMMENT	"buffer for bitmap";
 };
 RANGE {
 	TYPE	BYTETABLE;
 	START	$c300;
-	NAME	"BUF3";
-	END	$c3ff;
+	NAME	"SEDORIC_BUF3";
+	END		$c3ff;
 	COMMENT	"buffer for directory sector";
 };
 
-LABEL {
+Range {
+	TYPE	Code;
+	Start	$c400;
 	NAME	"SEDKERN_START";
-	ADDR	$c400;
+	END		$c573;
 };
 
-LABEL {
-	NAME	"MODIFY_IRQ_NMI";
-	ADDR	$c446;
-	comment "Modify irq and nmi vector";
-};
+#LABEL {
+#	NAME	"MODIFY_IRQ_NMI";
+#	ADDR	$c446;
+#	comment "Modify irq and nmi vector";
+#};
 
-LABEL {
-	NAME	"DELETE_COMMAND";
-	ADDR	$c6ec;
-	comment "$c6ec";
-};
 
-LABEL {
-	NAME	"MOVE_COMMAND";
-	ADDR	$c756;
-	comment "$c756";
-};
+#LABEL {
+#	NAME	"DELETE_COMMAND";
+#	ADDR	$c6ec;
+#	comment "$c6ec";
+#};
+
+#LABEL {
+#	NAME	"MOVE_COMMAND";
+#	ADDR	$c756;
+#	comment "$c756";
+#};
 
 RANGE {
 	TYPE	TEXTTABLE;
@@ -304,22 +444,54 @@ RANGE {
 	END	$c599;
 };
 
+RANGE {
+	TYPE	TEXTTABLE;
+	START	$C5B1;
+	NAME	"SEDORIC_STR_IN_DRIVE";
+	END		$C5B8;
+};
+
+
+RANGE {
+	TYPE	TEXTTABLE;
+	START	$C5BA;
+	NAME	"SEDORIC_STR_LOAD_DISC_FOR_BACKUP";
+	END		$C5D8;
+};
+
+RANGE {
+	TYPE	TEXTTABLE;
+	START	$C5DB;
+	NAME	"SEDORIC_STR_LOAD_SOURCE_DISC";
+	END		$C5EB;
+};
+
+RANGE {
+	TYPE	TEXTTABLE;
+	START	$C5EE;
+	NAME	"SEDORIC_STR_LOAD_TARGET_DISC";
+	END		$C5FE;
+};
+
+
+
+
 # Ideally, those should be ORGed at $400...
-#RANGE {
-#	TYPE	BYTETABLE;
-#	START	$c600;
-#	NAME	"KEYDEF";
-#	END	$c6ff;
-#	COMMENT	"Page4, ORIC-1";
-#};
-#
-#RANGE {
-#	TYPE	BYTETABLE;
-#	START	$c700;
-#	NAME	"KEYDEF";
-#	END	$c7ff;
-#	COMMENT	"Page4, Atmos";
-#};
+RANGE {
+	TYPE	BYTETABLE;
+	START	$c600;
+	NAME	"page4_oric1";
+	END	$c6ff;
+	COMMENT	"Page4, ORIC-1";
+};
+
+RANGE {
+	TYPE	BYTETABLE;
+	START	$c700;
+	NAME	"page4_atmos";
+	END	$c7ff;
+	COMMENT	"Page4, Atmos";
+};
 
 RANGE {
 	TYPE	BYTETABLE;
@@ -446,14 +618,56 @@ LABEL {
 	ADDR	$cff3;
 };
 
+
+
+
 LABEL {
-	NAME	"XROM";
+	NAME	"read_data";
+	ADDR	$D081;
+};
+
+LABEL {
+	NAME	"write_data";
+	ADDR	$D093;
+};
+
+
+Range {
+	TYPE	Code;
+	Start	$D0EA;
+	NAME	"SEDORIC_TEST_TRACK_UNDER_HEAD";
+	comment "Test de la piste sous la tête";
+	END		$D120;
+};
+
+
+
+
+
+Range {
+	TYPE	Code;
+	Start	$D302;
+	NAME	"SEDORIC_KEYBOARD_WAIT";
+	comment "Saisit une touche: si touche frappée alors N = 1 et A = code ASCII sinon N = 0";
+	END		$D309;
+};
+
+
+
+
+LABEL {
+	NAME	"SEDORIC_XROM";
 	ADDR	$d5d8;
 };
 
 LABEL {
 	NAME	"XAFHEX";
 	ADDR	$d613;
+};
+
+LABEL {
+	NAME	"XAFCAR_DISPLAY_SPACE";
+	ADDR	$D628;
 };
 
 LABEL {
@@ -480,6 +694,17 @@ LABEL {
 	NAME	"XPMAP";
 	ADDR	$da4c;
 };
+
+RANGE {
+	TYPE	Code;
+	START	$DA5D;
+	NAME	"READ_SECTOR_TRACK";
+	END		$DA6D;
+	COMMENT	"$DA5D";
+};
+
+
+
 
 LABEL {
 	NAME	"XPRSEC";
@@ -575,6 +800,17 @@ LABEL {
 	NAME	"CMD_OLD";
 	ADDR	$e0af;
 };
+
+RANGE {
+	TYPE	TEXTTABLE;
+	START	$E263;
+	NAME	"SEDORIC_STR_NOT_EMPTY_DIRECTORY";
+	END		$E276;
+	COMMENT	"X";
+};
+
+
+
 
 LABEL {
 	NAME	"CMD_DIR";
@@ -741,6 +977,15 @@ LABEL {
 	ADDR	$eb91;
 };
 
+
+LABEL {
+	NAME	"SEDORIC_XCHAR";
+	ADDR	$ebA3;
+	comment "XCHAR sélectionne le jeu de caractères correct (“normal” ou “accentué”) selon MODCLA. Suite commune aux commandes ACCENT, AZERTY, QWERTY et à la routine XSTATUS en EC17";
+};
+
+
+
 LABEL {
 	NAME	"CMD_AZERTY";
 	ADDR	$ebde;
@@ -776,6 +1021,17 @@ LABEL {
 	ADDR	$ec94;
 };
 
+RANGE {
+	TYPE	TEXTTABLE;
+	START	$EDC6;
+	NAME	"SEDORIC_STR_NOT_ALLOWED";
+	END		$EDD0;
+	COMMENT	"X";
+};
+
+
+
+
 LABEL {
 	NAME	"CMD_USING";
 	ADDR	$ee99;
@@ -793,7 +1049,7 @@ RANGE { START $EF54; END $EF54; TYPE BYTETABLE;
 };
 
 LABEL {
-	NAME	"display_char_in final_string";
+	NAME	"displayCharInFinalString";
 	ADDR	$ef5a;
 	comment "$ef5a";
 };
@@ -913,6 +1169,17 @@ LABEL {
 	NAME	"CMD_WINDOW";
 	ADDR	$f210;
 };
+
+
+RANGE {
+	TYPE	TEXTTABLE;
+	START	$FAC7;
+	NAME	"SEDORIC_COPYRIGHT";
+	END		$FAFA;
+	COMMENT	"Sedoric copyright";
+};
+
+
 
 
 RANGE {
